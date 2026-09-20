@@ -209,4 +209,8 @@ Tick/kind sequences match. After stripping `run_id` and `seed`, payloads are **I
 
 EW2 solved: False.
 
+## Card W3
+
+seed now enters _routine; stripped act stream 42 vs 7 DIFF. Seed-42 containment table still governs. EW2 solved False.
+
 No cosmology. No joy HUD. No wholesome score. No new P/S/M cells. No lived-hour client edits from this file.

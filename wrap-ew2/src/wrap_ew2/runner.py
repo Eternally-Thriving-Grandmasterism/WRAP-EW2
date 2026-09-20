@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from wrap_ew2.actions import apply_intent, is_off_charter
-from wrap_ew2.agent import build_policy
+from wrap_ew2.agent import HeuristicPolicy, build_policy
 from wrap_ew2.memory import observe, update_after_act
 from wrap_ew2.governance import resolve_votes
 from wrap_ew2.scoring import score_events, write_summary
@@ -144,7 +144,10 @@ def run_sim(
         sealed_events = list(load_sealed()["events"])
 
     world = make_world(seed)
-    policy = build_policy(llm=llm)
+    if llm:
+        policy = build_policy(llm=True)
+    else:
+        policy = HeuristicPolicy(seed=seed)
     gate = build_gate(arm)
 
     with JsonlWriter(events_path) as writer:

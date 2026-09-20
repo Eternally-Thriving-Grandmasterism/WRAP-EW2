@@ -84,6 +84,21 @@ def test_different_seed_same_arm_different_sha(tmp_path: Path) -> None:
     if result["status"] == "IDENTICAL":
         pytest.fail("42vs7: IDENTICAL — stop; do not claim seed-matrix diversity")
     assert events_sha256(a) != events_sha256(b)
+    if result.get("payload_status") == "IDENTICAL":
+        pytest.fail("42vs7: label-stripped payload IDENTICAL — FAIL")
+    assert result["payload_status"] == "DIFF"
+
+
+def test_stripped_wrap_payloads_42_vs_99_diff(tmp_path: Path) -> None:
+    a = run_sim(arm="wrap", ticks=80, seed=42, preset="none", out_dir=tmp_path / "s42")
+    b = run_sim(arm="wrap", ticks=80, seed=99, preset="none", out_dir=tmp_path / "s99")
+    result = compare_jsonl_traces(a, b)
+    print(format_trace_diff("42vs99", result))
+    if result["status"] == "IDENTICAL":
+        pytest.fail("42vs99: IDENTICAL — stop; do not claim seed-matrix diversity")
+    if result.get("payload_status") == "IDENTICAL":
+        pytest.fail("42vs99: label-stripped payload IDENTICAL — FAIL")
+    assert result["payload_status"] == "DIFF"
 
 
 def test_wrap_seeds_42_7_99_first_tick_kind_mismatch(tmp_path: Path) -> None:
@@ -119,7 +134,8 @@ def test_wrap_seeds_42_7_99_first_tick_kind_mismatch(tmp_path: Path) -> None:
             f"tick_b={result['first_event']['tick_b']}"
         )
         if result.get("payload_status") == "IDENTICAL":
-            print(
-                f"{left}vs{right}: label-stripped payload IDENTICAL; "
-                "do not claim seed-matrix diversity of the act stream"
+            pytest.fail(
+                f"{left}vs{right}: label-stripped payload IDENTICAL — FAIL; "
+                "seed must enter the stripped act stream"
             )
+        assert result["payload_status"] == "DIFF"
