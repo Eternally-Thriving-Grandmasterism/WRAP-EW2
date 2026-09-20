@@ -211,6 +211,8 @@ The W2 claim that stripped payloads were IDENTICAL is stale. W3 law holds: strip
 
 EW2 solved: False.
 
+PARK: Loop closed. Hands DARK PARK. EW2 solved False.
+
 ## Card W3
 
 seed now enters _routine; stripped act stream 42 vs 7 DIFF. Seed-42 containment table still governs. EW2 solved False.
