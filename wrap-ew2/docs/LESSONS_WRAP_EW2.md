@@ -196,4 +196,8 @@ Wrap E1 is conceptually the same Layer 0 gate as Ra-Thor `admit_or_block` (works
 - M_BREACH copies live `agent_04` journal text onto the board. Standing/inspect-journal without consent is the leak, not a crime-named tool.
 - Quiet-withdrawal tripped on wrap after STOP_WORK; unwrap kept harvesting/proposing. Volume drop is not the same as containment.
 
+## TRACE-DIFF (Card W2)
+
+Hashes differ. Same seed + arm still matches. Different seed + same wrap arm does not share an `events.jsonl` SHA-256. First differing event kind+tick for wrap 42vs7 and 42vs99 is printed by `wrap_ew2.trace_diff`. If a pair printed **IDENTICAL**, stop — do not claim seed-matrix diversity. EW2 solved: False.
+
 No cosmology. No joy HUD. No wholesome score. No new P/S/M cells. No lived-hour client edits from this file.
