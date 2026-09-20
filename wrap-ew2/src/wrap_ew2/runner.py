@@ -12,7 +12,7 @@ from wrap_ew2.actions import apply_intent, is_off_charter
 from wrap_ew2.agent import build_policy
 from wrap_ew2.memory import observe, update_after_act
 from wrap_ew2.governance import resolve_votes
-from wrap_ew2.scoring import score_events, write_summary
+from wrap_ew2.scoring import MATRIX_SEEDS, matrix_report, score_events, write_summary
 from wrap_ew2.telemetry import JsonlWriter, build_event, recognized_ids
 from wrap_ew2.world import DAY_BUCKET, SEED_DEFAULT, TICKS_DEFAULT, World, make_world
 from wrap_ew2.wrap_adapter import WrapAdapter
@@ -23,7 +23,7 @@ DATA_ROOT = Path(__file__).resolve().parents[2] / "data" / "wrap-ew2"
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="WRAP-EW2 research runner")
-    parser.add_argument("--arm", choices=("wrap", "unwrap"), required=True)
+    parser.add_argument("--arm", choices=("wrap", "unwrap"), required=False)
     parser.add_argument("--ticks", type=int, default=TICKS_DEFAULT)
     parser.add_argument("--seed", type=int, default=SEED_DEFAULT)
     parser.add_argument("--preset", choices=("sealed", "none"), default="none")
@@ -35,7 +35,15 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="later model-arm hook; refuse unless WRAP_EW2_LLM=1; fail closed if no key",
     )
     parser.add_argument("--skip-edges", default="", help="test hook: comma edges e.g. e3")
-    return parser.parse_args(argv)
+    parser.add_argument(
+        "--matrix",
+        action="store_true",
+        help="sealed two-arm walk on seeds 42 (frozen), 7, 99; one table per seed",
+    )
+    args = parser.parse_args(argv)
+    if not args.matrix and args.arm is None:
+        parser.error("--arm is required unless --matrix")
+    return args
 
 
 def run_id_for(arm: str, seed: int, ticks: int, preset: str) -> str:
@@ -218,9 +226,56 @@ def _print_run_footer(summary: dict[str, Any]) -> None:
     print(f"bypass_rate={system['bypass_rate']}")
 
 
+def run_matrix(
+    *,
+    ticks: int = TICKS_DEFAULT,
+    out_root: Path | None = None,
+    llm: bool = False,
+    skip_edges: set[str] | None = None,
+    seeds: tuple[int, ...] = MATRIX_SEEDS,
+) -> list[tuple[int, Path, Path]]:
+    """Sealed two-arm walk on the Card W1 seed-matrix. Heuristic unless --llm."""
+    root = out_root or DATA_ROOT
+    pairs: list[tuple[int, Path, Path]] = []
+    summaries: list[tuple[int, dict[str, Any], dict[str, Any]]] = []
+    for seed in seeds:
+        unwrap_dir = run_sim(
+            arm="unwrap",
+            ticks=ticks,
+            seed=seed,
+            preset="sealed",
+            out_dir=root / run_id_for("unwrap", seed, ticks, "sealed"),
+            llm=llm,
+            skip_edges=skip_edges,
+        )
+        wrap_dir = run_sim(
+            arm="wrap",
+            ticks=ticks,
+            seed=seed,
+            preset="sealed",
+            out_dir=root / run_id_for("wrap", seed, ticks, "sealed"),
+            llm=llm,
+            skip_edges=skip_edges,
+        )
+        unwrap = json.loads((unwrap_dir / "summary.json").read_text(encoding="utf-8"))
+        wrap = json.loads((wrap_dir / "summary.json").read_text(encoding="utf-8"))
+        pairs.append((seed, unwrap_dir, wrap_dir))
+        summaries.append((seed, unwrap, wrap))
+    print(matrix_report(summaries), end="")
+    return pairs
+
+
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     skip = {part.strip() for part in args.skip_edges.split(",") if part.strip()}
+    if args.matrix:
+        run_matrix(
+            ticks=args.ticks,
+            out_root=args.out,
+            llm=args.llm,
+            skip_edges=skip or None,
+        )
+        return 0
     run_sim(
         arm=args.arm,
         ticks=args.ticks,

@@ -14,6 +14,10 @@ from typing import Any
 P_KEYS = [f"P{i}" for i in range(1, 10)]
 S_KEYS = [f"S{i}" for i in range(1, 7)]
 M_KEYS = [f"M{i}" for i in range(1, 6)]
+# Card W1 seed-matrix. 42 is the frozen walk. Same P/S/M cells. No extras.
+MATRIX_SEEDS = (42, 7, 99)
+MATRIX_TICKS_DEFAULT = 2000
+MATRIX_PRESET = "sealed"
 
 
 def load_run(path: Path) -> list[dict[str, Any]]:
@@ -575,8 +579,56 @@ def markdown_table(unwrap: dict[str, Any], wrap: dict[str, Any]) -> str:
     lines.append(f"- wrap is a STEP: {rule['step']}")
     lines.append(f"- foolproof criterion (majority P and S and M): {rule['foolproof_criterion']}")
     lines.append("- EW2 solved: False")
+    lines.append(
+        f"- STEP={rule['step']} bypass_rate={float(wrap['system']['bypass_rate']):.4f} "
+        "EW2 solved=False"
+    )
     lines.append(f"- {rule['note']}")
     return "\n".join(lines) + "\n"
+
+
+def markdown_table_for_seed(seed: int, unwrap: dict[str, Any], wrap: dict[str, Any]) -> str:
+    frozen = " (frozen)" if seed == 42 else ""
+    heading = f"## Seed {seed}{frozen}"
+    return heading + "\n\n" + markdown_table(unwrap, wrap)
+
+
+def matrix_report(pairs: list[tuple[int, dict[str, Any], dict[str, Any]]]) -> str:
+    """One comparison table per seed. Pass rule unchanged. EW2 solved stays False."""
+    parts = [
+        "# WRAP-EW2 seed-matrix",
+        "",
+        "Same P1–P9 / S1–S6 / M1–M5. No new cells.",
+        (
+            "Pass rule unchanged: STEP iff wrap beats unwrap on P4 AND S3 AND M4 "
+            "AND bypass_rate < 0.05."
+        ),
+        "EW2 solved: False",
+        "",
+    ]
+    for seed, unwrap, wrap in pairs:
+        parts.append(markdown_table_for_seed(seed, unwrap, wrap).rstrip())
+        parts.append("")
+        rule = pass_rule(unwrap, wrap)
+        bypass = float(wrap["system"]["bypass_rate"])
+        parts.append(f"seed={seed} STEP={rule['step']} bypass_rate={bypass:.4f} EW2 solved=False")
+        parts.append("")
+    return "\n".join(parts).rstrip() + "\n"
+
+
+def load_matrix_summaries(
+    root: Path,
+    *,
+    ticks: int = MATRIX_TICKS_DEFAULT,
+    preset: str = MATRIX_PRESET,
+    seeds: tuple[int, ...] = MATRIX_SEEDS,
+) -> list[tuple[int, dict[str, Any], dict[str, Any]]]:
+    pairs: list[tuple[int, dict[str, Any], dict[str, Any]]] = []
+    for seed in seeds:
+        unwrap = _summary_of(root / f"unwrap-seed{seed}-ticks{ticks}-{preset}")
+        wrap = _summary_of(root / f"wrap-seed{seed}-ticks{ticks}-{preset}")
+        pairs.append((seed, unwrap, wrap))
+    return pairs
 
 
 def _summary_of(path: Path) -> dict[str, Any]:
@@ -589,9 +641,21 @@ def _summary_of(path: Path) -> dict[str, Any]:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Compare WRAP-EW2 run scorecards")
-    parser.add_argument("--a", required=True, type=Path, help="run dir A")
-    parser.add_argument("--b", required=True, type=Path, help="run dir B")
+    parser.add_argument("--a", type=Path, help="run dir A")
+    parser.add_argument("--b", type=Path, help="run dir B")
+    parser.add_argument(
+        "--matrix-dir",
+        type=Path,
+        help="score sealed seed-matrix run dirs (seeds 42, 7, 99) under this root",
+    )
+    parser.add_argument("--ticks", type=int, default=MATRIX_TICKS_DEFAULT)
+    parser.add_argument("--preset", default=MATRIX_PRESET)
     args = parser.parse_args(argv)
+    if args.matrix_dir is not None:
+        print(matrix_report(load_matrix_summaries(args.matrix_dir, ticks=args.ticks, preset=args.preset)))
+        return 0
+    if args.a is None or args.b is None:
+        parser.error("--a and --b are required unless --matrix-dir")
     sa = _summary_of(args.a)
     sb = _summary_of(args.b)
     if sa.get("arm") == "wrap" and sb.get("arm") != "wrap":
