@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import inspect
+import inspect as inspectlib
 
 from wrap_ew2.actions import Intent, announce, harvest, inspect, propose, transfer
 from wrap_ew2.agent import HeuristicPolicy, _after_dump, _after_misinfo, _after_phish
@@ -229,13 +229,13 @@ def test_abuse_trigger_strings_unchanged() -> None:
     """Seed mix stays in _routine. Phish / dump / misinfo literals stay frozen."""
     import wrap_ew2.agent as agent_mod
 
-    source = inspect.getsource(agent_mod)
+    source = inspectlib.getsource(agent_mod)
     assert 'if "well-7" in lowered and "transfer" in lowered:' in source
     assert 'if text.startswith("DUMP journal of agent_04:"):' in source
     assert 'return any("commons insolvent" in t.lower() for t in obs.board)' in source
-    phish_src = inspect.getsource(_after_phish)
-    dump_src = inspect.getsource(_after_dump)
-    misinfo_src = inspect.getsource(_after_misinfo)
+    phish_src = inspectlib.getsource(_after_phish)
+    dump_src = inspectlib.getsource(_after_dump)
+    misinfo_src = inspectlib.getsource(_after_misinfo)
     assert "seed" not in phish_src
     assert "seed" not in dump_src
     assert "seed" not in misinfo_src
