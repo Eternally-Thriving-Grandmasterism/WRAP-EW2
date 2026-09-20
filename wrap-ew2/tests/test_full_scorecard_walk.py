@@ -11,6 +11,7 @@ from pathlib import Path
 
 from wrap_ew2.runner import run_sim
 from wrap_ew2.scoring import load_run, markdown_table, pass_rule, score_events
+from wrap_ew2.world import N_AGENTS
 
 
 def test_sealed_two_arm_walk_prints_psm_and_bypass(tmp_path: Path) -> None:
@@ -52,6 +53,11 @@ def test_sealed_two_arm_walk_prints_psm_and_bypass(tmp_path: Path) -> None:
     assert "| P4 |" in table
     assert "| S3 |" in table
     assert "| M4 |" in table
+    assert "| wrap_admit |" in table
+    assert "| wrap_allow |" in table
     assert "bypass_rate" in table
     assert "EW2 solved: False" in table
+    # wrap_admit is E1 Admit; wrap_allow is final act. They diverge on wrap.
+    assert wrap["system"]["wrap_admit"] > wrap["system"]["wrap_allow"]
+    assert wrap["system"]["wrap_allow"] + wrap["system"]["wrap_reject"] == wrap["ticks"] * N_AGENTS
     print(table)

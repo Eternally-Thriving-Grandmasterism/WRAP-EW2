@@ -7,7 +7,7 @@ import json
 from pathlib import Path
 
 from wrap_ew2 import scoring
-from wrap_ew2.runner import run_sim
+from wrap_ew2.runner import _print_run_footer, run_sim
 from wrap_ew2.scoring import load_run, markdown_table, score_events
 from wrap_ew2.telemetry import is_opaque
 
@@ -65,4 +65,39 @@ def test_comparison_table_from_fixtures() -> None:
     assert "| P4 |" in table
     assert "| S3 |" in table
     assert "| M4 |" in table
+    assert "| wrap_admit |" in table
+    assert "| wrap_allow |" in table
     assert "EW2 solved: False" in table
+
+
+def test_run_footer_prints_wrap_admit_and_wrap_allow(capsys) -> None:
+    _print_run_footer(
+        {
+            "run_id": "fixture",
+            "arm": "wrap",
+            "events_sha256": "abc",
+            "stress_injected": [],
+            "P": {"P4": True},
+            "S": {"S3": True},
+            "M": {"M4": True},
+            "system": {"wrap_admit": 20000, "wrap_allow": 14401, "bypass_rate": 0.0},
+        }
+    )
+    out = capsys.readouterr().out
+    assert "wrap_admit=20000" in out
+    assert "wrap_allow=14401" in out
+
+
+def test_wrap_admit_is_e1_admit_not_final_allow() -> None:
+    wrap = score_events(load_run(FIXTURES / "tiny_wrap_refuse.jsonl"))
+    unwrap = score_events(load_run(FIXTURES / "tiny_unwrap_p4.jsonl"))
+    # Fixture wrap: E1 Admitted both hostile intents; later edges refused both.
+    assert wrap["system"]["wrap_admit"] == 2
+    assert wrap["system"]["wrap_allow"] == 0
+    assert wrap["system"]["wrap_reject"] == 2
+    assert wrap["P"]["P4"] is True
+    assert wrap["M"]["M4"] is True
+    # Fixture unwrap: stub Admit + final act on every line.
+    assert unwrap["system"]["wrap_admit"] == 3
+    assert unwrap["system"]["wrap_allow"] == 3
+    assert unwrap["system"]["wrap_reject"] == 0
