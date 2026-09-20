@@ -3,10 +3,14 @@
 This module must not import the sealed preset. Agents see world surfaces only.
 The heuristic can break P4/S3/M4 (snoop, phish transfer, crowd vote) and can
 also restrain (ignore odd memos, warn peers). Wrap vs unwrap can therefore differ.
+
+`--llm` stays off unless WRAP_EW2_LLM=1 is also set. Even then, a missing key
+raises RuntimeError. Heuristic fallback is not allowed. v1 does not call a model.
 """
 
 from __future__ import annotations
 
+import os
 from typing import Protocol
 
 from wrap_ew2.actions import (
@@ -203,14 +207,55 @@ def _credit_proxy(obs: Observation) -> list[tuple[str, float]]:
     return list(obs.standings.items())
 
 
+LLM_ENABLE_ENV = "WRAP_EW2_LLM"
+LLM_KEY_ENVS = (
+    "WRAP_EW2_LLM_KEY",
+    "OPENAI_API_KEY",
+    "ANTHROPIC_API_KEY",
+    "XAI_API_KEY",
+)
+
+
+def llm_env_enabled() -> bool:
+    return os.environ.get(LLM_ENABLE_ENV) == "1"
+
+
+def llm_key_present() -> bool:
+    return any(os.environ.get(name, "").strip() for name in LLM_KEY_ENVS)
+
+
+def _refuse_llm(*, reason: str) -> None:
+    raise RuntimeError(
+        f"{reason} Fail closed; heuristic fallback is not allowed. "
+        "v1 stays on the offline heuristic unless WRAP_EW2_LLM=1 and --llm."
+    )
+
+
 class LLMPolicy:
-    """Optional later hook. v1 must not require live model calls."""
+    """Later model-arm hook. Fail closed. No live vendor calls in v1."""
 
     def __init__(self) -> None:
-        raise RuntimeError("optional --llm later; v1 runs the offline heuristic")
+        if not llm_env_enabled():
+            _refuse_llm(
+                reason=(
+                    "--llm refused: WRAP_EW2_LLM=1 is required to enable the later "
+                    "model-arm hook."
+                )
+            )
+        if not llm_key_present():
+            _refuse_llm(
+                reason=(
+                    "--llm refused: WRAP_EW2_LLM=1 is set but no API key is present "
+                    f"({', '.join(LLM_KEY_ENVS)})."
+                )
+            )
 
     def choose(self, obs: Observation) -> Intent:
-        raise RuntimeError("optional --llm later; v1 runs the offline heuristic")
+        raise RuntimeError(
+            "LLMPolicy model arm is not implemented in v1. "
+            "No live OpenAI / xAI / Anthropic calls. "
+            "Fail closed; heuristic fallback is not allowed."
+        )
 
 
 def build_policy(*, llm: bool = False) -> AgentPolicy:

@@ -29,7 +29,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--preset", choices=("sealed", "none"), default="none")
     parser.add_argument("--out", type=Path, default=None)
     parser.add_argument("--run-id", default=None)
-    parser.add_argument("--llm", action="store_true", help="optional later; v1 refuses")
+    parser.add_argument(
+        "--llm",
+        action="store_true",
+        help="later model-arm hook; refuse unless WRAP_EW2_LLM=1; fail closed if no key",
+    )
     parser.add_argument("--skip-edges", default="", help="test hook: comma edges e.g. e3")
     return parser.parse_args(argv)
 

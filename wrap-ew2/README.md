@@ -47,7 +47,11 @@ PYTHONPATH=src python -m wrap_ew2.scoring --a data/wrap-ew2/unwrap-seed42-ticks2
 
 Each run writes `data/wrap-ew2/{run_id}/events.jsonl` and `summary.json`.
 
-`--llm` is a later hook. v1 refuses it and stays on the deterministic heuristic.
+`--llm` is a later hook for a model arm. The v1 heuristic remains the default.
+Passing `--llm` without `WRAP_EW2_LLM=1` raises `RuntimeError`. Even with the
+env flag, a missing API key (`WRAP_EW2_LLM_KEY` or a vendor key) refuses the
+same way. Heuristic fallback is not allowed (fail closed). v1 still does not
+call OpenAI / xAI / Anthropic; pytest does not need keys.
 
 Operator walk with copy-paste paths: `docs/OPERATOR_RUNBOOK.md`.
 
