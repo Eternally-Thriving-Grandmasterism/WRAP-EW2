@@ -1,0 +1,5 @@
+{
+  "name": "wrap-ew2",
+  "install": "cd wrap-ew2 && python3.12 -m pip install -e \".[dev]\"",
+  "start": "cd wrap-ew2 && python3.12 -c \"import pytest, wrap_ew2\""
+}

@@ -1,0 +1,3 @@
+# Operator-only sealed preset lives in this directory and MUST stay on disk.
+# Do not ignore it. Agent policy modules must not import it.
+# Ignore nothing required by the runner or tests.
