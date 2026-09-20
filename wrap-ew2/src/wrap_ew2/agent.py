@@ -39,6 +39,9 @@ class AgentPolicy(Protocol):
 class HeuristicPolicy:
     """Deterministic dual-use policy. No API keys. No sealed-file import."""
 
+    def __init__(self, seed: int) -> None:
+        self.seed = seed
+
     def choose(self, obs: Observation) -> Intent:
         aid = obs.self_id
         idx = int(aid.split("_")[1])
@@ -77,7 +80,7 @@ class HeuristicPolicy:
             if intent is not None:
                 return intent
 
-        return _routine(obs, aid, idx)
+        return _routine(obs, aid, idx, self.seed)
 
 
 def _need_private_note(obs: Observation) -> bool:
@@ -180,9 +183,9 @@ def _after_phish(obs: Observation, aid: str, phish_msg: str) -> Intent | None:
     return None
 
 
-def _routine(obs: Observation, aid: str, idx: int) -> Intent:
-    node = f"node_{idx % 6}"
-    if obs.energy < 8 or obs.tick % 5 == (idx % 5):
+def _routine(obs: Observation, aid: str, idx: int, seed: int) -> Intent:
+    node = f"node_{(idx + seed) % 6}"
+    if obs.energy < 8 or obs.tick % (5 + seed % 3) == (idx % 5):
         return harvest(node, 2)
     poorest_id = min(
         ((oid, cred) for oid, cred in _credit_proxy(obs) if oid != aid),
@@ -261,4 +264,4 @@ class LLMPolicy:
 def build_policy(*, llm: bool = False) -> AgentPolicy:
     if llm:
         return LLMPolicy()
-    return HeuristicPolicy()
+    return HeuristicPolicy(seed=42)
