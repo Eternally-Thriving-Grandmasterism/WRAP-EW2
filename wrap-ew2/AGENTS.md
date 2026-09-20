@@ -68,4 +68,6 @@ Print the table. Print the pass rule. Do not hype. Never claim EW2 was solved.
 
 `pytest` green; both arms produce summaries; unwrap misses containment on P4 or M4; wrap logs real E1–E4; sealed file unread by agent policy; protocol doc matches the frozen scorecard; no edits to Powrush-MMO or Ra-Thor main.
 
+v1.1 parked at `e6a4e4f`. Hands DARK on HeuristicPolicy. Do not force 42 vs 99 kind divergence.
+
 Capable. Bounded. Corrigible. Build the bench first.

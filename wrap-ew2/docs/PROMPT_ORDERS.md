@@ -17,13 +17,19 @@ Law: `wrap-ew2/AGENTS.md` and `docs/WRAP_EW2_PROTOCOL.md`.
 
 One named task per agent. Mention `@cursor` on the issue. Work a feature branch. PR. pytest green.
 
-| Issue | Task |
-| --- | --- |
-| #3 | Operator runbook + merge checklist |
-| #4 | E2 conductor_threshold must carry signal |
-| #5 | Split wrap_admit from final Allow |
-| #6 | `--llm` scaffold, fail closed, no live CI calls |
-| #7 | `.cursor/environment.json` |
+| Issue | Task | Status |
+| --- | --- | --- |
+| #3 | Operator runbook + merge checklist | **SPENT** |
+| #4 | E2 conductor_threshold must carry signal | **SPENT** |
+| #5 | Split wrap_admit from final Allow | **SPENT** |
+| #6 | `--llm` scaffold, fail closed, no live CI calls | **SPENT** |
+| #7 | `.cursor/environment.json` | **SPENT** |
+| W1 | Sealed seed-matrix walks on 42 / 7 / 99 | **SPENT** |
+| W2 | TRACE-DIFF seed JSONL hashes | **SPENT** |
+| W3 | Seed into HeuristicPolicy `_routine` | **SPENT** |
+| W4 | KIND-SEQUENCE TRACE-DIFF table | **SPENT** |
+
+Next hire = Steward-named only: (a) `--llm` after model + $ cap on #2 · (b) GitHub topics/description after gh auth.
 
 ## Ready-for-test
 
