@@ -13,6 +13,7 @@ from wrap_ew2.scoring import (
     events_sha256,
     first_tick_kind_mismatch,
     format_trace_diff,
+    kind_sequence_report,
 )
 
 
@@ -69,11 +70,38 @@ def test_trace_diff_helper_identifies_tick_kind_mismatch(tmp_path: Path) -> None
     assert same_payload["status"] == "DIFF"
     assert same_payload["payload_status"] == "IDENTICAL"
     assert same_payload["mismatch"] is None
+    assert same_payload["kind_sequence"]["status"] == "SAME-KINDS"
     assert event_kind({"intent": {"op": "harvest"}}) == "harvest"
     events_a = [{"tick": 0, "intent": {"op": "harvest"}}, {"tick": 1, "intent": {"op": "transfer"}}]
     events_b = [{"tick": 0, "intent": {"op": "harvest"}}, {"tick": 1, "intent": {"op": "warn"}}]
     assert first_tick_kind_mismatch(events_a, events_b)["kind_b"] == "warn"
+    kinds_diff = kind_sequence_report(events_a, events_b)
+    assert kinds_diff["status"] == "DIFF"
+    assert kinds_diff["tick"] == 1
+    kinds_same = kind_sequence_report(events_a, events_a)
+    assert kinds_same["status"] == "SAME-KINDS"
+    assert result["kind_sequence"]["status"] == "DIFF"
+    assert result["kind_sequence"]["tick"] == 1
     print(format_trace_diff("fixture", result))
+
+
+def test_kind_sequence_same_kinds_names_payload_field(tmp_path: Path) -> None:
+    a = tmp_path / "a.jsonl"
+    b = tmp_path / "b.jsonl"
+    a.write_text(
+        '{"tick":0,"intent":{"op":"harvest","node_id":"node_0"},"seed":42}\n',
+        encoding="utf-8",
+    )
+    b.write_text(
+        '{"tick":0,"intent":{"op":"harvest","node_id":"node_3"},"seed":7}\n',
+        encoding="utf-8",
+    )
+    result = compare_jsonl_traces(a, b)
+    assert result["status"] == "DIFF"
+    assert result["payload_status"] == "DIFF"
+    assert result["kind_sequence"]["status"] == "SAME-KINDS"
+    assert result["payload_field"] == "node_id"
+    assert "SAME-KINDS / DIFF-PAYLOAD" in format_trace_diff("node-field", result)
 
 
 def test_different_seed_same_arm_different_sha(tmp_path: Path) -> None:
@@ -87,6 +115,10 @@ def test_different_seed_same_arm_different_sha(tmp_path: Path) -> None:
     if result.get("payload_status") == "IDENTICAL":
         pytest.fail("42vs7: label-stripped payload IDENTICAL — FAIL")
     assert result["payload_status"] == "DIFF"
+    kind = result["kind_sequence"]
+    assert kind["status"] in {"DIFF", "SAME-KINDS"}
+    if kind["status"] == "DIFF":
+        assert isinstance(kind["tick"], int)
 
 
 def test_stripped_wrap_payloads_42_vs_99_diff(tmp_path: Path) -> None:
@@ -102,7 +134,7 @@ def test_stripped_wrap_payloads_42_vs_99_diff(tmp_path: Path) -> None:
 
 
 def test_wrap_seeds_42_7_99_first_tick_kind_mismatch(tmp_path: Path) -> None:
-    """Card W2: wrap arm 42 vs 7 and 42 vs 99. Print first tick/kind mismatch."""
+    """Card W4: wrap sealed 2000 ticks. SHA, stripped, kind-sequence (tick or SAME-KINDS)."""
     paths: dict[int, Path] = {}
     for seed in SEALED_WALK_SEEDS:
         paths[seed] = run_sim(
@@ -126,16 +158,23 @@ def test_wrap_seeds_42_7_99_first_tick_kind_mismatch(tmp_path: Path) -> None:
             )
         assert result["status"] == "DIFF"
         assert result["first_event"] is not None
-        print(
-            f"{left}vs{right} first differing event kind+tick: "
-            f"kind_a={result['first_event']['kind_a']} "
-            f"tick_a={result['first_event']['tick_a']} "
-            f"kind_b={result['first_event']['kind_b']} "
-            f"tick_b={result['first_event']['tick_b']}"
-        )
         if result.get("payload_status") == "IDENTICAL":
             pytest.fail(
                 f"{left}vs{right}: label-stripped payload IDENTICAL — FAIL; "
                 "seed must enter the stripped act stream"
             )
         assert result["payload_status"] == "DIFF"
+        kind = result["kind_sequence"]
+        assert kind["status"] in {"DIFF", "SAME-KINDS"}
+        if kind["status"] == "DIFF":
+            assert isinstance(kind["tick"], int)
+            print(
+                f"{left}vs{right} kind-sequence: tick {kind['tick']} "
+                f"{kind['kind_a']} / {kind['kind_b']}"
+            )
+        else:
+            field = result.get("payload_field")
+            print(
+                f"{left}vs{right} kind-sequence: SAME-KINDS / DIFF-PAYLOAD "
+                f"field={field}"
+            )

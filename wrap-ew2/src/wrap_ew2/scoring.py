@@ -88,6 +88,33 @@ def without_trace_labels(event: dict[str, Any]) -> dict[str, Any]:
     return {key: value for key, value in event.items() if key not in TRACE_LABEL_KEYS}
 
 
+def first_changed_field(left: Any, right: Any) -> str | None:
+    """First dict key that moved. Nested dicts report the leaf (e.g. node_id)."""
+    if isinstance(left, dict) and isinstance(right, dict):
+        keys: list[str] = list(left.keys())
+        for key in right:
+            if key not in left:
+                keys.append(key)
+        for key in keys:
+            if key not in left or key not in right:
+                return str(key)
+            va = left[key]
+            vb = right[key]
+            if va == vb:
+                continue
+            if isinstance(va, dict) and isinstance(vb, dict):
+                inner = first_changed_field(va, vb)
+                return inner if inner is not None else str(key)
+            return str(key)
+        return None
+    return None
+
+
+def first_payload_field(event_a: dict[str, Any], event_b: dict[str, Any]) -> str | None:
+    """First payload field that moved after dropping run_id and seed."""
+    return first_changed_field(without_trace_labels(event_a), without_trace_labels(event_b))
+
+
 def first_payload_mismatch(
     events_a: list[dict[str, Any]], events_b: list[dict[str, Any]]
 ) -> dict[str, Any] | None:
@@ -103,10 +130,42 @@ def first_payload_mismatch(
                 "tick_b": int(eb.get("tick", -1)),
                 "kind_a": event_kind(ea),
                 "kind_b": event_kind(eb),
+                "field": first_payload_field(ea, eb),
             }
     if len(events_a) != len(events_b):
-        return first_tick_kind_mismatch(events_a, events_b)
+        mismatch = first_tick_kind_mismatch(events_a, events_b)
+        if mismatch is not None:
+            mismatch["field"] = None
+        return mismatch
     return None
+
+
+def kind_sequence_report(
+    events_a: list[dict[str, Any]], events_b: list[dict[str, Any]]
+) -> dict[str, Any]:
+    """First tick where event.kind differs, or SAME-KINDS if kinds match."""
+    n = min(len(events_a), len(events_b))
+    for i in range(n):
+        ka = event_kind(events_a[i])
+        kb = event_kind(events_b[i])
+        if ka != kb:
+            return {
+                "status": "DIFF",
+                "tick": int(events_a[i].get("tick", i)),
+                "index": i,
+                "kind_a": ka,
+                "kind_b": kb,
+            }
+    if len(events_a) != len(events_b):
+        ev = events_a[n] if n < len(events_a) else events_b[n]
+        return {
+            "status": "DIFF",
+            "tick": int(ev.get("tick", n)),
+            "index": n,
+            "kind_a": event_kind(events_a[n]) if n < len(events_a) else None,
+            "kind_b": event_kind(events_b[n]) if n < len(events_b) else None,
+        }
+    return {"status": "SAME-KINDS"}
 
 
 def first_differing_event(
@@ -143,10 +202,14 @@ def compare_jsonl_traces(path_a: Path, path_b: Path) -> dict[str, Any]:
             "first_event": None,
             "payload": None,
             "payload_status": "IDENTICAL",
+            "payload_field": None,
+            "kind_sequence": {"status": "SAME-KINDS"},
         }
     events_a = load_run(path_a)
     events_b = load_run(path_b)
     payload = first_payload_mismatch(events_a, events_b)
+    kind_sequence = kind_sequence_report(events_a, events_b)
+    payload_field = None if payload is None else payload.get("field")
     return {
         "status": "DIFF",
         "sha_a": sha_a,
@@ -155,17 +218,46 @@ def compare_jsonl_traces(path_a: Path, path_b: Path) -> dict[str, Any]:
         "first_event": first_differing_event(events_a, events_b),
         "payload": payload,
         "payload_status": "IDENTICAL" if payload is None else "DIFF",
+        "payload_field": payload_field,
+        "kind_sequence": kind_sequence,
     }
 
 
+def format_kind_sequence(result: dict[str, Any]) -> str:
+    """KIND truth: concrete tick, or SAME-KINDS / DIFF-PAYLOAD plus first field."""
+    kind = result.get("kind_sequence") or {}
+    if kind.get("status") == "DIFF":
+        return (
+            f"kind-sequence: tick {kind['tick']} "
+            f"{kind.get('kind_a')} / {kind.get('kind_b')}"
+        )
+    if result.get("payload_status") == "DIFF":
+        field = result.get("payload_field")
+        extra = f" field={field}" if field else ""
+        return f"kind-sequence: SAME-KINDS / DIFF-PAYLOAD{extra}"
+    return "kind-sequence: SAME-KINDS"
+
+
 def format_trace_diff(pair: str, result: dict[str, Any]) -> str:
-    if result["status"] == "IDENTICAL":
-        return f"{pair}: IDENTICAL sha={result['sha_a']}"
+    raw = result["status"]
+    if raw == "IDENTICAL":
+        lines = [
+            f"{pair}: IDENTICAL sha={result['sha_a']}",
+            "raw SHA: IDENTICAL",
+            "stripped: IDENTICAL",
+            format_kind_sequence(result),
+        ]
+        return "\n".join(lines)
     lines = [
         f"{pair}: DIFF",
+        "raw SHA: DIFF",
         f"sha_a={result['sha_a']}",
         f"sha_b={result['sha_b']}",
     ]
+    payload_status = result.get("payload_status")
+    if payload_status:
+        lines.append(f"stripped: {payload_status}")
+    lines.append(format_kind_sequence(result))
     mismatch = result.get("mismatch")
     if mismatch is None:
         lines.append("first tick/kind mismatch: none")
@@ -182,15 +274,17 @@ def format_trace_diff(pair: str, result: dict[str, Any]) -> str:
             f"tick_a={first['tick_a']} kind_a={first['kind_a']} "
             f"tick_b={first['tick_b']} kind_b={first['kind_b']}"
         )
-    payload_status = result.get("payload_status")
     payload = result.get("payload")
     if payload_status == "IDENTICAL":
         lines.append("label-stripped payload: IDENTICAL")
     elif payload is not None:
+        field = payload.get("field") or result.get("payload_field")
+        field_bit = f" field={field}" if field else ""
         lines.append(
             "label-stripped payload: DIFF "
             f"tick_a={payload['tick_a']} kind_a={payload['kind_a']} "
             f"tick_b={payload['tick_b']} kind_b={payload['kind_b']}"
+            f"{field_bit}"
         )
     return "\n".join(lines)
 
