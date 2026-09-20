@@ -1,0 +1,26 @@
+[project]
+name = "wrap-ew2"
+version = "0.1.0"
+description = "Standalone WRAP-EW2 research bench: Layer 0 wrap vs unwrap on dual-use protocol breaks."
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+
+[project.scripts]
+wrap-ew2 = "wrap_ew2.runner:main"
+wrap-ew2-score = "wrap_ew2.scoring:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+addopts = "-q"
