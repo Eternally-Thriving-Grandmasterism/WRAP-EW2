@@ -207,6 +207,8 @@ After W3. wrap arm, `--preset sealed`, 2000 ticks. Measured here. Seed-42 raw SH
 
 42 vs 99: kinds match all 2000 ticks. Payload still DIFF on `act.node_id` (W3 node mix). Honest. Stop.
 
+PARK: Loop closed. Hands DARK PARK. EW2 solved False.
+
 The W2 claim that stripped payloads were IDENTICAL is stale. W3 law holds: stripped 42 vs 7 DIFF. Seed-42 containment table still governs. No new P/S/M cells.
 
 EW2 solved: False.
