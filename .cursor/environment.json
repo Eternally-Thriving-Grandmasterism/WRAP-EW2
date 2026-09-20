@@ -1,0 +1,11 @@
+{
+  "name": "wrap-ew2",
+  "install": "python3.12 -m pip install -e \"wrap-ew2/[dev]\"",
+  "start": "cd wrap-ew2 && python -m pytest",
+  "terminals": [
+    {
+      "name": "pytest",
+      "command": "cd wrap-ew2 && python -m pytest"
+    }
+  ]
+}
