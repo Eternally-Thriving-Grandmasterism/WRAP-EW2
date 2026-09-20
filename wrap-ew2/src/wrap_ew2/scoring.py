@@ -38,7 +38,10 @@ def events_sha256(path: Path) -> str:
 
 
 def event_kind(event: dict[str, Any]) -> str:
-    """JSONL rows have no top-level kind. Use intent.op, else stress_id."""
+    """Prefer event.kind when present. Else intent.op, else stress_id."""
+    labeled = event.get("kind")
+    if labeled:
+        return str(labeled)
     intent = event.get("intent") or {}
     op = intent.get("op")
     if op:
@@ -80,6 +83,21 @@ def first_tick_kind_mismatch(
     return None
 
 
+def first_kind_sequence(
+    events_a: list[dict[str, Any]], events_b: list[dict[str, Any]]
+) -> int | str:
+    """First tick where event.kind differs. SAME-KINDS if kinds match throughout."""
+    n = min(len(events_a), len(events_b))
+    for i in range(n):
+        if event_kind(events_a[i]) != event_kind(events_b[i]):
+            return int(events_a[i].get("tick", i))
+    if len(events_a) != len(events_b):
+        if n < len(events_a):
+            return int(events_a[n].get("tick", n))
+        return int(events_b[n].get("tick", n))
+    return "SAME-KINDS"
+
+
 TRACE_LABEL_KEYS = frozenset({"run_id", "seed"})
 
 
@@ -88,13 +106,47 @@ def without_trace_labels(event: dict[str, Any]) -> dict[str, Any]:
     return {key: value for key, value in event.items() if key not in TRACE_LABEL_KEYS}
 
 
+def first_moved_field(left: Any, right: Any, prefix: str = "") -> str | None:
+    """First key path that differs. Nested dicts use dotted paths (e.g. intent.node_id)."""
+    if left == right:
+        return None
+    if isinstance(left, dict) and isinstance(right, dict):
+        keys: list[str] = []
+        seen: set[str] = set()
+        for key in list(left) + list(right):
+            if key not in seen:
+                seen.add(str(key))
+                keys.append(str(key))
+        for key in keys:
+            path = f"{prefix}.{key}" if prefix else key
+            if key not in left or key not in right:
+                return path
+            found = first_moved_field(left[key], right[key], path)
+            if found is not None:
+                return found
+        return prefix or None
+    if isinstance(left, list) and isinstance(right, list):
+        limit = min(len(left), len(right))
+        for i in range(limit):
+            path = f"{prefix}[{i}]" if prefix else f"[{i}]"
+            found = first_moved_field(left[i], right[i], path)
+            if found is not None:
+                return found
+        if len(left) != len(right):
+            return f"{prefix}[{limit}]" if prefix else f"[{limit}]"
+        return prefix or None
+    return prefix or "<root>"
+
+
 def first_payload_mismatch(
     events_a: list[dict[str, Any]], events_b: list[dict[str, Any]]
 ) -> dict[str, Any] | None:
     """First event that differs after stripping run_id and seed."""
     n = min(len(events_a), len(events_b))
     for i in range(n):
-        if without_trace_labels(events_a[i]) != without_trace_labels(events_b[i]):
+        stripped_a = without_trace_labels(events_a[i])
+        stripped_b = without_trace_labels(events_b[i])
+        if stripped_a != stripped_b:
             ea = events_a[i]
             eb = events_b[i]
             return {
@@ -103,9 +155,13 @@ def first_payload_mismatch(
                 "tick_b": int(eb.get("tick", -1)),
                 "kind_a": event_kind(ea),
                 "kind_b": event_kind(eb),
+                "field": first_moved_field(stripped_a, stripped_b),
             }
     if len(events_a) != len(events_b):
-        return first_tick_kind_mismatch(events_a, events_b)
+        mismatch = first_tick_kind_mismatch(events_a, events_b)
+        if mismatch is not None:
+            mismatch = {**mismatch, "field": "length"}
+        return mismatch
     return None
 
 
@@ -143,6 +199,7 @@ def compare_jsonl_traces(path_a: Path, path_b: Path) -> dict[str, Any]:
             "first_event": None,
             "payload": None,
             "payload_status": "IDENTICAL",
+            "kind_sequence": "SAME-KINDS",
         }
     events_a = load_run(path_a)
     events_b = load_run(path_b)
@@ -155,17 +212,25 @@ def compare_jsonl_traces(path_a: Path, path_b: Path) -> dict[str, Any]:
         "first_event": first_differing_event(events_a, events_b),
         "payload": payload,
         "payload_status": "IDENTICAL" if payload is None else "DIFF",
+        "kind_sequence": first_kind_sequence(events_a, events_b),
     }
 
 
 def format_trace_diff(pair: str, result: dict[str, Any]) -> str:
     if result["status"] == "IDENTICAL":
-        return f"{pair}: IDENTICAL sha={result['sha_a']}"
+        return f"{pair}: IDENTICAL sha={result['sha_a']} kind-sequence=SAME-KINDS"
     lines = [
         f"{pair}: DIFF",
         f"sha_a={result['sha_a']}",
         f"sha_b={result['sha_b']}",
+        f"raw SHA: {result['status']}",
+        f"stripped: {result.get('payload_status')}",
     ]
+    kind_sequence = result.get("kind_sequence")
+    if kind_sequence == "SAME-KINDS":
+        lines.append("kind-sequence: SAME-KINDS")
+    elif kind_sequence is not None:
+        lines.append(f"kind-sequence: tick {kind_sequence}")
     mismatch = result.get("mismatch")
     if mismatch is None:
         lines.append("first tick/kind mismatch: none")
@@ -187,11 +252,17 @@ def format_trace_diff(pair: str, result: dict[str, Any]) -> str:
     if payload_status == "IDENTICAL":
         lines.append("label-stripped payload: IDENTICAL")
     elif payload is not None:
+        field = payload.get("field")
+        field_bit = f" field={field}" if field else ""
         lines.append(
             "label-stripped payload: DIFF "
             f"tick_a={payload['tick_a']} kind_a={payload['kind_a']} "
             f"tick_b={payload['tick_b']} kind_b={payload['kind_b']}"
+            f"{field_bit}"
         )
+        if kind_sequence == "SAME-KINDS":
+            named = field or "unknown"
+            lines.append(f"SAME-KINDS / DIFF-PAYLOAD field={named}")
     return "\n".join(lines)
 
 
