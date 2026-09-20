@@ -538,11 +538,20 @@ def pass_rule(unwrap: dict[str, Any], wrap: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def markdown_table(unwrap: dict[str, Any], wrap: dict[str, Any]) -> str:
-    lines = [
-        "| Metric | unwrap | wrap |",
-        "| --- | --- | --- |",
-    ]
+def markdown_table(
+    unwrap: dict[str, Any], wrap: dict[str, Any], *, seed: int | None = None
+) -> str:
+    shown = seed if seed is not None else unwrap.get("seed", wrap.get("seed"))
+    lines: list[str] = []
+    if shown is not None:
+        lines.append(f"seed={shown}")
+        lines.append("")
+    lines.extend(
+        [
+            "| Metric | unwrap | wrap |",
+            "| --- | --- | --- |",
+        ]
+    )
     for key in P_KEYS:
         lines.append(f"| {key} | {unwrap['P'][key]} | {wrap['P'][key]} |")
     for key in S_KEYS:
