@@ -7,6 +7,7 @@ E1 Admit count, not containment. wrap_allow is the final decision act.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 from pathlib import Path
 from typing import Any
@@ -16,8 +17,12 @@ S_KEYS = [f"S{i}" for i in range(1, 7)]
 M_KEYS = [f"M{i}" for i in range(1, 6)]
 
 
+def events_jsonl_path(path: Path) -> Path:
+    return path / "events.jsonl" if path.is_dir() else path
+
+
 def load_run(path: Path) -> list[dict[str, Any]]:
-    events_path = path / "events.jsonl" if path.is_dir() else path
+    events_path = events_jsonl_path(path)
     events: list[dict[str, Any]] = []
     with events_path.open(encoding="utf-8") as fh:
         for line in fh:
@@ -25,6 +30,125 @@ def load_run(path: Path) -> list[dict[str, Any]]:
             if line:
                 events.append(json.loads(line))
     return events
+
+
+def events_sha256(path: Path) -> str:
+    """SHA-256 of the raw events.jsonl bytes. Same helper the runner stores."""
+    return hashlib.sha256(events_jsonl_path(path).read_bytes()).hexdigest()
+
+
+def event_kind(event: dict[str, Any]) -> str:
+    """JSONL rows have no top-level kind. Use intent.op, else stress_id."""
+    intent = event.get("intent") or {}
+    op = intent.get("op")
+    if op:
+        return str(op)
+    stress = event.get("stress_id")
+    if stress:
+        return str(stress)
+    return "unknown"
+
+
+def first_tick_kind_mismatch(
+    events_a: list[dict[str, Any]], events_b: list[dict[str, Any]]
+) -> dict[str, Any] | None:
+    """First index where tick or kind differs. None if those sequences match."""
+    n = min(len(events_a), len(events_b))
+    for i in range(n):
+        ea = events_a[i]
+        eb = events_b[i]
+        ta = int(ea.get("tick", -1))
+        tb = int(eb.get("tick", -1))
+        ka = event_kind(ea)
+        kb = event_kind(eb)
+        if ta != tb or ka != kb:
+            return {
+                "index": i,
+                "tick_a": ta,
+                "tick_b": tb,
+                "kind_a": ka,
+                "kind_b": kb,
+            }
+    if len(events_a) != len(events_b):
+        return {
+            "index": n,
+            "tick_a": int(events_a[n]["tick"]) if n < len(events_a) else None,
+            "tick_b": int(events_b[n]["tick"]) if n < len(events_b) else None,
+            "kind_a": event_kind(events_a[n]) if n < len(events_a) else None,
+            "kind_b": event_kind(events_b[n]) if n < len(events_b) else None,
+        }
+    return None
+
+
+def first_differing_event(
+    events_a: list[dict[str, Any]], events_b: list[dict[str, Any]]
+) -> dict[str, Any] | None:
+    """First event object that is not equal. Reports that row's tick + kind."""
+    n = min(len(events_a), len(events_b))
+    for i in range(n):
+        if events_a[i] != events_b[i]:
+            ea = events_a[i]
+            eb = events_b[i]
+            return {
+                "index": i,
+                "tick_a": int(ea.get("tick", -1)),
+                "tick_b": int(eb.get("tick", -1)),
+                "kind_a": event_kind(ea),
+                "kind_b": event_kind(eb),
+            }
+    if len(events_a) != len(events_b):
+        return first_tick_kind_mismatch(events_a, events_b)
+    return None
+
+
+def compare_jsonl_traces(path_a: Path, path_b: Path) -> dict[str, Any]:
+    """Compare two JSONL traces. IDENTICAL means stop; do not claim diversity."""
+    sha_a = events_sha256(path_a)
+    sha_b = events_sha256(path_b)
+    if sha_a == sha_b:
+        return {
+            "status": "IDENTICAL",
+            "sha_a": sha_a,
+            "sha_b": sha_b,
+            "mismatch": None,
+            "first_event": None,
+        }
+    events_a = load_run(path_a)
+    events_b = load_run(path_b)
+    return {
+        "status": "DIFF",
+        "sha_a": sha_a,
+        "sha_b": sha_b,
+        "mismatch": first_tick_kind_mismatch(events_a, events_b),
+        "first_event": first_differing_event(events_a, events_b),
+    }
+
+
+def format_trace_diff(pair: str, result: dict[str, Any]) -> str:
+    if result["status"] == "IDENTICAL":
+        return f"{pair}: IDENTICAL sha={result['sha_a']}"
+    lines = [
+        f"{pair}: DIFF",
+        f"sha_a={result['sha_a']}",
+        f"sha_b={result['sha_b']}",
+    ]
+    mismatch = result.get("mismatch")
+    if mismatch is None:
+        lines.append("first tick/kind mismatch: none")
+    else:
+        lines.append(
+            "first tick/kind mismatch: "
+            f"tick_a={mismatch['tick_a']} kind_a={mismatch['kind_a']} "
+            f"tick_b={mismatch['tick_b']} kind_b={mismatch['kind_b']}"
+        )
+    first = result.get("first_event")
+    if first is not None:
+        lines.append(
+            "first differing event: "
+            f"tick_a={first['tick_a']} kind_a={first['kind_a']} "
+            f"tick_b={first['tick_b']} kind_b={first['kind_b']}"
+        )
+    return "\n".join(lines)
 
 
 def _intent(event: dict[str, Any]) -> dict[str, Any]:
@@ -600,7 +724,17 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Compare WRAP-EW2 run scorecards")
     parser.add_argument("--a", required=True, type=Path, help="run dir A")
     parser.add_argument("--b", required=True, type=Path, help="run dir B")
+    parser.add_argument(
+        "--trace-diff",
+        action="store_true",
+        help="print JSONL SHA + first tick/kind mismatch; IDENTICAL stops diversity claims",
+    )
     args = parser.parse_args(argv)
+    if args.trace_diff:
+        pair = f"{args.a.name}vs{args.b.name}"
+        result = compare_jsonl_traces(args.a, args.b)
+        print(format_trace_diff(pair, result))
+        return 0
     sa = _summary_of(args.a)
     sb = _summary_of(args.b)
     if sa.get("arm") == "wrap" and sb.get("arm") != "wrap":
