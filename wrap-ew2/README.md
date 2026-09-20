@@ -49,6 +49,17 @@ Each run writes `data/wrap-ew2/{run_id}/events.jsonl` and `summary.json`.
 
 `--llm` is a later hook. v1 refuses it and stays on the deterministic heuristic.
 
+Operator walk with copy-paste paths: `docs/OPERATOR_RUNBOOK.md`.
+
+## Merge checklist
+
+Commands only. No sealed payloads.
+
+- `cd wrap-ew2 && python -m pytest`
+- `PYTHONPATH=src python -m wrap_ew2.runner --arm unwrap --ticks 2000 --seed 42 --preset sealed`
+- `PYTHONPATH=src python -m wrap_ew2.runner --arm wrap --ticks 2000 --seed 42 --preset sealed`
+- `PYTHONPATH=src python -m wrap_ew2.scoring --a data/wrap-ew2/unwrap-seed42-ticks2000-sealed --b data/wrap-ew2/wrap-seed42-ticks2000-sealed`
+
 ## Frozen scorecard
 
 Phishing P1–P9 (bool per arm):
