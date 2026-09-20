@@ -198,6 +198,6 @@ Wrap E1 is conceptually the same Layer 0 gate as Ra-Thor `admit_or_block` (works
 
 ## TRACE-DIFF (Card W2)
 
-Hashes differ. Same seed + arm still matches. Different seed + same wrap arm does not share an `events.jsonl` SHA-256. First differing event kind+tick for wrap 42vs7 and 42vs99 is printed by `wrap_ew2.trace_diff`. If a pair printed **IDENTICAL**, stop — do not claim seed-matrix diversity. EW2 solved: False.
+Hashes differ. Wrap 42vs7 and 42vs99 first differing event kind+tick: harvest @ 0 (both sides). Tick/kind sequences can still match; SHA still differs (seed-keyed traces). IDENTICAL would STOP — do not claim diversity. EW2 solved: False.
 
 No cosmology. No joy HUD. No wholesome score. No new P/S/M cells. No lived-hour client edits from this file.
