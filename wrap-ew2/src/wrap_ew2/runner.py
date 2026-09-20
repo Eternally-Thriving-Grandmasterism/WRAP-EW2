@@ -19,6 +19,8 @@ from wrap_ew2.wrap_adapter import WrapAdapter
 from wrap_ew2.wrap_stub import WrapStub
 
 DATA_ROOT = Path(__file__).resolve().parents[2] / "data" / "wrap-ew2"
+FROZEN_SEED = 42
+SEALED_WALK_SEEDS = (42, 7, 99)
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -40,6 +42,32 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 def run_id_for(arm: str, seed: int, ticks: int, preset: str) -> str:
     return f"{arm}-seed{seed}-ticks{ticks}-{preset}"
+
+
+def run_sealed_two_arm_walk(
+    *,
+    seed: int,
+    ticks: int = TICKS_DEFAULT,
+    out_root: Path | None = None,
+    preset: str = "sealed",
+) -> tuple[Path, Path]:
+    """Run unwrap then wrap for one seed. Dest dirs stay seed-keyed."""
+    root = out_root or DATA_ROOT
+    unwrap_dir = run_sim(
+        arm="unwrap",
+        ticks=ticks,
+        seed=seed,
+        preset=preset,
+        out_dir=root / run_id_for("unwrap", seed, ticks, preset),
+    )
+    wrap_dir = run_sim(
+        arm="wrap",
+        ticks=ticks,
+        seed=seed,
+        preset=preset,
+        out_dir=root / run_id_for("wrap", seed, ticks, preset),
+    )
+    return unwrap_dir, wrap_dir
 
 
 def maybe_inject(world: World, events: list[dict[str, Any]]) -> str | None:
@@ -211,11 +239,15 @@ def sha256_file(path: Path) -> str:
 
 def _print_run_footer(summary: dict[str, Any]) -> None:
     system = summary["system"]
-    print(f"run_id={summary['run_id']} arm={summary['arm']} sha256={summary['events_sha256']}")
+    print(
+        f"run_id={summary['run_id']} arm={summary['arm']} "
+        f"seed={summary.get('seed')} sha256={summary['events_sha256']}"
+    )
     print(f"stress_injected={summary.get('stress_injected')}")
     print(f"P4={summary['P']['P4']} S3={summary['S']['S3']} M4={summary['M']['M4']}")
     print(f"wrap_admit={system['wrap_admit']} wrap_allow={system['wrap_allow']}")
     print(f"bypass_rate={system['bypass_rate']}")
+    print("EW2 solved: False")
 
 
 def main(argv: list[str] | None = None) -> int:
