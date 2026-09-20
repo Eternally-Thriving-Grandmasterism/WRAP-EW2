@@ -11,6 +11,7 @@ from wrap_ew2.scoring import (
     compare_jsonl_traces,
     event_kind,
     events_sha256,
+    first_kind_sequence,
     first_tick_kind_mismatch,
     format_trace_diff,
 )
@@ -28,6 +29,7 @@ def test_same_seed_wrap_identical_jsonl(tmp_path: Path) -> None:
     assert events_sha256(a) == events_sha256(b)
     self_cmp = compare_jsonl_traces(a, a)
     assert self_cmp["status"] == "IDENTICAL"
+    assert self_cmp["kind_sequence"] == "SAME-KINDS"
 
 
 def test_sealed_runs_are_deterministic(tmp_path: Path) -> None:
@@ -59,6 +61,7 @@ def test_trace_diff_helper_identifies_tick_kind_mismatch(tmp_path: Path) -> None
         "kind_b": "warn",
     }
     assert result["payload_status"] == "DIFF"
+    assert result["kind_sequence"] == 1
     labels_only = tmp_path / "labels.jsonl"
     labels_only.write_text(
         '{"tick":0,"intent":{"op":"harvest"},"seed":99,"run_id":"x"}\n'
@@ -69,11 +72,51 @@ def test_trace_diff_helper_identifies_tick_kind_mismatch(tmp_path: Path) -> None
     assert same_payload["status"] == "DIFF"
     assert same_payload["payload_status"] == "IDENTICAL"
     assert same_payload["mismatch"] is None
+    assert same_payload["kind_sequence"] == "SAME-KINDS"
     assert event_kind({"intent": {"op": "harvest"}}) == "harvest"
+    assert event_kind({"kind": "harvest", "intent": {"op": "transfer"}}) == "harvest"
     events_a = [{"tick": 0, "intent": {"op": "harvest"}}, {"tick": 1, "intent": {"op": "transfer"}}]
     events_b = [{"tick": 0, "intent": {"op": "harvest"}}, {"tick": 1, "intent": {"op": "warn"}}]
     assert first_tick_kind_mismatch(events_a, events_b)["kind_b"] == "warn"
+    assert first_kind_sequence(events_a, events_b) == 1
     print(format_trace_diff("fixture", result))
+
+
+def test_kind_sequence_reporter_tick_or_same_kinds(tmp_path: Path) -> None:
+    """Card W4: reporter returns a concrete tick or SAME-KINDS. Do not retune _routine."""
+    same_kinds = tmp_path / "same-kinds.jsonl"
+    same_kinds.write_text(
+        '{"tick":0,"intent":{"op":"harvest","node_id":"node_0"},"seed":42}\n'
+        '{"tick":1,"intent":{"op":"harvest","node_id":"node_1"},"seed":42}\n',
+        encoding="utf-8",
+    )
+    node_moved = tmp_path / "node-moved.jsonl"
+    node_moved.write_text(
+        '{"tick":0,"intent":{"op":"harvest","node_id":"node_3"},"seed":7}\n'
+        '{"tick":1,"intent":{"op":"harvest","node_id":"node_4"},"seed":7}\n',
+        encoding="utf-8",
+    )
+    result = compare_jsonl_traces(same_kinds, node_moved)
+    assert result["status"] == "DIFF"
+    assert result["payload_status"] == "DIFF"
+    assert result["kind_sequence"] == "SAME-KINDS"
+    assert first_kind_sequence(
+        [{"tick": 0, "intent": {"op": "harvest", "node_id": "node_0"}}],
+        [{"tick": 0, "intent": {"op": "harvest", "node_id": "node_3"}}],
+    ) == "SAME-KINDS"
+    assert result["payload"]["field"] == "intent.node_id"
+    assert "SAME-KINDS / DIFF-PAYLOAD field=intent.node_id" in format_trace_diff(
+        "node-pair", result
+    )
+    kind_changed = tmp_path / "kind-changed.jsonl"
+    kind_changed.write_text(
+        '{"tick":0,"intent":{"op":"harvest","node_id":"node_0"},"seed":99}\n'
+        '{"tick":4,"intent":{"op":"announce"},"seed":99}\n',
+        encoding="utf-8",
+    )
+    tick_result = compare_jsonl_traces(same_kinds, kind_changed)
+    assert tick_result["kind_sequence"] == 1
+    assert isinstance(tick_result["kind_sequence"], int)
 
 
 def test_different_seed_same_arm_different_sha(tmp_path: Path) -> None:
@@ -102,7 +145,7 @@ def test_stripped_wrap_payloads_42_vs_99_diff(tmp_path: Path) -> None:
 
 
 def test_wrap_seeds_42_7_99_first_tick_kind_mismatch(tmp_path: Path) -> None:
-    """Card W2: wrap arm 42 vs 7 and 42 vs 99. Print first tick/kind mismatch."""
+    """Card W4: wrap arm 42 vs 7 and 42 vs 99. KIND-sequence after W3. Do not retune."""
     paths: dict[int, Path] = {}
     for seed in SEALED_WALK_SEEDS:
         paths[seed] = run_sim(
@@ -126,12 +169,12 @@ def test_wrap_seeds_42_7_99_first_tick_kind_mismatch(tmp_path: Path) -> None:
             )
         assert result["status"] == "DIFF"
         assert result["first_event"] is not None
+        kind_sequence = result["kind_sequence"]
+        assert kind_sequence == "SAME-KINDS" or isinstance(kind_sequence, int)
         print(
-            f"{left}vs{right} first differing event kind+tick: "
-            f"kind_a={result['first_event']['kind_a']} "
-            f"tick_a={result['first_event']['tick_a']} "
-            f"kind_b={result['first_event']['kind_b']} "
-            f"tick_b={result['first_event']['tick_b']}"
+            f"{left}vs{right} kind-sequence={kind_sequence} "
+            f"stripped={result.get('payload_status')} "
+            f"field={(result.get('payload') or {}).get('field')}"
         )
         if result.get("payload_status") == "IDENTICAL":
             pytest.fail(
@@ -139,3 +182,5 @@ def test_wrap_seeds_42_7_99_first_tick_kind_mismatch(tmp_path: Path) -> None:
                 "seed must enter the stripped act stream"
             )
         assert result["payload_status"] == "DIFF"
+        if kind_sequence == "SAME-KINDS":
+            assert (result.get("payload") or {}).get("field")

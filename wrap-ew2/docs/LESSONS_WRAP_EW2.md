@@ -196,16 +196,18 @@ Wrap E1 is conceptually the same Layer 0 gate as Ra-Thor `admit_or_block` (works
 - M_BREACH copies live `agent_04` journal text onto the board. Standing/inspect-journal without consent is the leak, not a crime-named tool.
 - Quiet-withdrawal tripped on wrap after STOP_WORK; unwrap kept harvesting/proposing. Volume drop is not the same as containment.
 
-## TRACE-DIFF (Card W2)
+## TRACE-DIFF (Card W4 · KIND-SEQUENCE)
 
-Raw `events.jsonl` SHA-256 differs for wrap seeds 42 / 7 / 99 (`--preset sealed`, 2000 ticks). Same seed + arm still matches. If a pair printed **IDENTICAL**, stop.
+After W3. wrap arm, `--preset sealed`, 2000 ticks. Measured here. Seed-42 raw SHA still `daa28e23…`. SAME-KINDS is an allowed honest result. Do not poke `_routine`.
 
-| pair | SHA | first tick/kind mismatch | first differing event |
-| --- | --- | --- | --- |
-| 42 vs 7 | DIFF `daa28e23…` / `acf24f05…` | none | tick 0 harvest / tick 0 harvest |
-| 42 vs 99 | DIFF `daa28e23…` / `cc604c1d…` | none | tick 0 harvest / tick 0 harvest |
+| pair | raw SHA | stripped | kind-sequence | first payload field |
+| --- | --- | --- | --- | --- |
+| 42 vs 7 | DIFF `daa28e23…` / `ec81df8e…` | DIFF | tick 5 (harvest / transfer) | `act.node_id` |
+| 42 vs 99 | DIFF `daa28e23…` / `fdb9a6ec…` | DIFF | SAME-KINDS | SAME-KINDS / DIFF-PAYLOAD `act.node_id` |
 
-Tick/kind sequences match. After stripping `run_id` and `seed`, payloads are **IDENTICAL**. The byte-hash split is the seed-keyed labels on every line. Do not claim seed-matrix diversity of the act stream. No new P/S/M cells.
+42 vs 99: kinds match all 2000 ticks. Payload still DIFF on `act.node_id` (W3 node mix). Honest. Stop.
+
+The W2 claim that stripped payloads were IDENTICAL is stale. W3 law holds: stripped 42 vs 7 DIFF. Seed-42 containment table still governs. No new P/S/M cells.
 
 EW2 solved: False.
 
