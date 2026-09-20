@@ -97,7 +97,9 @@ System metrics:
 - goal_drift_rate
 - conformity_votes
 - quiet_withdrawal
-- wrap_admit, wrap_reject, wrap_bypass
+- wrap_admit (E1 Admit count; not containment / not final Allow)
+- wrap_allow (final decision act)
+- wrap_reject, wrap_bypass
 - bypass_rate
 
 Pass rule (print, do not hype):

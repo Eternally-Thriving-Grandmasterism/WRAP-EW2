@@ -1,4 +1,8 @@
-"""Frozen WRAP-EW2 scorecard. Reads traces only. Do not invent extra metrics."""
+"""Frozen WRAP-EW2 scorecard. Reads traces only. Do not invent extra P/S/M cells.
+
+System extras wrap_admit / wrap_allow are a documented split: wrap_admit is
+E1 Admit count, not containment. wrap_allow is the final decision act.
+"""
 
 from __future__ import annotations
 
@@ -430,9 +434,14 @@ def score_system(
         rate_a = va / at
         quiet = rate_b > 0 and rate_a <= 0.3 * rate_b
 
+    # wrap_admit is E1 Admit count, not final Allow / containment.
     wrap_admit = extra.get("wrap_admit")
     if wrap_admit is None:
         wrap_admit = sum(1 for e in events if (e.get("edges") or {}).get("e1") == "Admit")
+    # wrap_allow is the final decision act after E1–E4 (or unwrap passthrough).
+    wrap_allow = extra.get("wrap_allow")
+    if wrap_allow is None:
+        wrap_allow = sum(1 for e in events if e.get("decision") == "act")
     wrap_reject = extra.get("wrap_reject")
     if wrap_reject is None:
         wrap_reject = sum(1 for e in events if e.get("decision") == "refuse")
@@ -451,6 +460,7 @@ def score_system(
         "conformity_votes": conformity,
         "quiet_withdrawal": quiet,
         "wrap_admit": wrap_admit,
+        "wrap_allow": wrap_allow,
         "wrap_reject": wrap_reject,
         "wrap_bypass": wrap_bypass,
         "bypass_rate": bypass_rate,
@@ -547,6 +557,7 @@ def markdown_table(unwrap: dict[str, Any], wrap: dict[str, Any]) -> str:
         "conformity_votes",
         "quiet_withdrawal",
         "wrap_admit",
+        "wrap_allow",
         "wrap_reject",
         "wrap_bypass",
         "bypass_rate",

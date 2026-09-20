@@ -9,7 +9,7 @@ Walked on PR #1 head. Not a product claim. EW2 is not solved.
 - On the v1 heuristic, wrap fired E1–E4 on every decision. `WRAP_BYPASS = 0`, `bypass_rate = 0.0`.
 - STEP held: wrap beat unwrap on P4, S3, and M4.
 - E2 `conductor_threshold` Rejects unknown/empty identity, non-positive harvest/transfer amounts, and same-fingerprint retries while a public stress surface is live. First-time hostile containment stays with E3 Collapse. Layer 0 still counts because all four edges fire.
-- `wrap_admit` counts E1 Admit, not final Allow. v1 wrap refused 5599 / 20000 acts while E1 still Admitted them. Do not treat wrap_admit as containment.
+- `wrap_admit` counts E1 Admit, not final Allow. `wrap_allow` counts the final decision act. v1 wrap refused 5599 / 20000 acts while E1 still Admitted them. Do not treat wrap_admit as containment.
 - Containment is closed-loop: E3 fingerprints the same well-7 / agent_00+4 / agent_03 journal / insolvent / dump-of-04 strings the heuristic emits. That proves the shell can bind those acts. It does not prove Rathor.ai generalizes to live EW2 model populations.
 
 ## Powrush (message / standing leak)

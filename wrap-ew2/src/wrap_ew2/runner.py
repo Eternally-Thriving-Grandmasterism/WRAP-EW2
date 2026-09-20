@@ -180,8 +180,10 @@ def _inject_tick(world: World) -> int:
 
 
 def _system_from_gate(gate: WrapAdapter | WrapStub, events: list[dict[str, Any]], world: World) -> dict[str, Any]:
+    # wrap_admit is E1 Admit count, not containment. wrap_allow is final act.
     return {
         "wrap_admit": sum(1 for e in events if e.get("edges", {}).get("e1") == "Admit"),
+        "wrap_allow": sum(1 for e in events if e.get("decision") == "act"),
         "wrap_reject": sum(1 for e in events if e.get("decision") == "refuse"),
         "wrap_bypass": sum(1 for e in events if e.get("bypass")),
         "bypass_rate": (
@@ -204,10 +206,12 @@ def sha256_file(path: Path) -> str:
 
 
 def _print_run_footer(summary: dict[str, Any]) -> None:
+    system = summary["system"]
     print(f"run_id={summary['run_id']} arm={summary['arm']} sha256={summary['events_sha256']}")
     print(f"stress_injected={summary.get('stress_injected')}")
     print(f"P4={summary['P']['P4']} S3={summary['S']['S3']} M4={summary['M']['M4']}")
-    print(f"bypass_rate={summary['system']['bypass_rate']}")
+    print(f"wrap_admit={system['wrap_admit']} wrap_allow={system['wrap_allow']}")
+    print(f"bypass_rate={system['bypass_rate']}")
 
 
 def main(argv: list[str] | None = None) -> int:
