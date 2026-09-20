@@ -198,9 +198,14 @@ Wrap E1 is conceptually the same Layer 0 gate as Ra-Thor `admit_or_block` (works
 
 ## TRACE-DIFF (Card W2)
 
-Hashes differ. Same seed + arm still matches (determinism law). Different seed + same wrap arm does not share an `events.jsonl` SHA-256. If a pair printed **IDENTICAL**, stop — do not claim seed-matrix diversity.
+Raw `events.jsonl` SHA-256 differs for wrap seeds 42 / 7 / 99 (`--preset sealed`, 2000 ticks). Same seed + arm still matches. If a pair printed **IDENTICAL**, stop.
 
-Wrap arm, `--preset sealed`, 2000 ticks. First tick/kind mismatch is printed by `test_wrap_seeds_42_7_99_first_tick_kind_mismatch` (42vs7, 42vs99). No new P/S/M cells.
+| pair | SHA | first tick/kind mismatch | first differing event |
+| --- | --- | --- | --- |
+| 42 vs 7 | DIFF `daa28e23…` / `acf24f05…` | none | tick 0 harvest / tick 0 harvest |
+| 42 vs 99 | DIFF `daa28e23…` / `cc604c1d…` | none | tick 0 harvest / tick 0 harvest |
+
+Tick/kind sequences match. After stripping `run_id` and `seed`, payloads are **IDENTICAL**. The byte-hash split is the seed-keyed labels on every line. Do not claim seed-matrix diversity of the act stream. No new P/S/M cells.
 
 EW2 solved: False.
 

@@ -80,6 +80,35 @@ def first_tick_kind_mismatch(
     return None
 
 
+TRACE_LABEL_KEYS = frozenset({"run_id", "seed"})
+
+
+def without_trace_labels(event: dict[str, Any]) -> dict[str, Any]:
+    """Drop seed-keyed labels. Diversity must not be a tautology on run_id/seed."""
+    return {key: value for key, value in event.items() if key not in TRACE_LABEL_KEYS}
+
+
+def first_payload_mismatch(
+    events_a: list[dict[str, Any]], events_b: list[dict[str, Any]]
+) -> dict[str, Any] | None:
+    """First event that differs after stripping run_id and seed."""
+    n = min(len(events_a), len(events_b))
+    for i in range(n):
+        if without_trace_labels(events_a[i]) != without_trace_labels(events_b[i]):
+            ea = events_a[i]
+            eb = events_b[i]
+            return {
+                "index": i,
+                "tick_a": int(ea.get("tick", -1)),
+                "tick_b": int(eb.get("tick", -1)),
+                "kind_a": event_kind(ea),
+                "kind_b": event_kind(eb),
+            }
+    if len(events_a) != len(events_b):
+        return first_tick_kind_mismatch(events_a, events_b)
+    return None
+
+
 def first_differing_event(
     events_a: list[dict[str, Any]], events_b: list[dict[str, Any]]
 ) -> dict[str, Any] | None:
@@ -112,15 +141,20 @@ def compare_jsonl_traces(path_a: Path, path_b: Path) -> dict[str, Any]:
             "sha_b": sha_b,
             "mismatch": None,
             "first_event": None,
+            "payload": None,
+            "payload_status": "IDENTICAL",
         }
     events_a = load_run(path_a)
     events_b = load_run(path_b)
+    payload = first_payload_mismatch(events_a, events_b)
     return {
         "status": "DIFF",
         "sha_a": sha_a,
         "sha_b": sha_b,
         "mismatch": first_tick_kind_mismatch(events_a, events_b),
         "first_event": first_differing_event(events_a, events_b),
+        "payload": payload,
+        "payload_status": "IDENTICAL" if payload is None else "DIFF",
     }
 
 
@@ -147,6 +181,16 @@ def format_trace_diff(pair: str, result: dict[str, Any]) -> str:
             "first differing event: "
             f"tick_a={first['tick_a']} kind_a={first['kind_a']} "
             f"tick_b={first['tick_b']} kind_b={first['kind_b']}"
+        )
+    payload_status = result.get("payload_status")
+    payload = result.get("payload")
+    if payload_status == "IDENTICAL":
+        lines.append("label-stripped payload: IDENTICAL")
+    elif payload is not None:
+        lines.append(
+            "label-stripped payload: DIFF "
+            f"tick_a={payload['tick_a']} kind_a={payload['kind_a']} "
+            f"tick_b={payload['tick_b']} kind_b={payload['kind_b']}"
         )
     return "\n".join(lines)
 

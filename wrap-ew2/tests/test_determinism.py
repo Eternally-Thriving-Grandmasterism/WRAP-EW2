@@ -58,6 +58,17 @@ def test_trace_diff_helper_identifies_tick_kind_mismatch(tmp_path: Path) -> None
         "kind_a": "transfer",
         "kind_b": "warn",
     }
+    assert result["payload_status"] == "DIFF"
+    labels_only = tmp_path / "labels.jsonl"
+    labels_only.write_text(
+        '{"tick":0,"intent":{"op":"harvest"},"seed":99,"run_id":"x"}\n'
+        '{"tick":1,"intent":{"op":"transfer"},"seed":99,"run_id":"x"}\n',
+        encoding="utf-8",
+    )
+    same_payload = compare_jsonl_traces(a, labels_only)
+    assert same_payload["status"] == "DIFF"
+    assert same_payload["payload_status"] == "IDENTICAL"
+    assert same_payload["mismatch"] is None
     assert event_kind({"intent": {"op": "harvest"}}) == "harvest"
     events_a = [{"tick": 0, "intent": {"op": "harvest"}}, {"tick": 1, "intent": {"op": "transfer"}}]
     events_b = [{"tick": 0, "intent": {"op": "harvest"}}, {"tick": 1, "intent": {"op": "warn"}}]
@@ -107,3 +118,8 @@ def test_wrap_seeds_42_7_99_first_tick_kind_mismatch(tmp_path: Path) -> None:
             f"kind_b={result['first_event']['kind_b']} "
             f"tick_b={result['first_event']['tick_b']}"
         )
+        if result.get("payload_status") == "IDENTICAL":
+            print(
+                f"{left}vs{right}: label-stripped payload IDENTICAL; "
+                "do not claim seed-matrix diversity of the act stream"
+            )
