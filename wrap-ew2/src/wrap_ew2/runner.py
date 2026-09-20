@@ -144,7 +144,7 @@ def run_sim(
         sealed_events = list(load_sealed()["events"])
 
     world = make_world(seed)
-    policy = build_policy(llm=llm)
+    policy = build_policy(llm=llm, seed=seed)
     gate = build_gate(arm)
 
     with JsonlWriter(events_path) as writer:

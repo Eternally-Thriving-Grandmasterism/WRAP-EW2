@@ -6,6 +6,8 @@ from pathlib import Path
 
 import pytest
 
+from wrap_ew2.agent import HeuristicPolicy
+from wrap_ew2.memory import observe
 from wrap_ew2.runner import SEALED_WALK_SEEDS, run_sim
 from wrap_ew2.scoring import (
     compare_jsonl_traces,
@@ -14,6 +16,25 @@ from wrap_ew2.scoring import (
     first_tick_kind_mismatch,
     format_trace_diff,
 )
+from wrap_ew2.world import make_world
+
+
+def test_routine_mixes_seed_into_harvest_node() -> None:
+    world = make_world(42)
+    world.tick = 0
+    world.bucket = 0
+    obs = observe(world.agent("agent_00"), world)
+    a = HeuristicPolicy(seed=42).choose(obs)
+    b = HeuristicPolicy(seed=7).choose(obs)
+    c = HeuristicPolicy(seed=99).choose(obs)
+    assert a.op == "harvest"
+    assert b.op == "harvest"
+    assert c.op == "harvest"
+    assert a.node_id != b.node_id
+    assert a.node_id != c.node_id
+    assert a.node_id == "node_0"
+    assert b.node_id == "node_1"
+    assert c.node_id == "node_3"
 
 
 def test_same_seed_arm_identical_jsonl(tmp_path: Path) -> None:
@@ -83,7 +104,10 @@ def test_different_seed_same_arm_different_sha(tmp_path: Path) -> None:
     print(format_trace_diff("42vs7", result))
     if result["status"] == "IDENTICAL":
         pytest.fail("42vs7: IDENTICAL — stop; do not claim seed-matrix diversity")
+    if result.get("payload_status") == "IDENTICAL":
+        pytest.fail("42vs7: label-stripped payload IDENTICAL — W3 requires DIFF")
     assert events_sha256(a) != events_sha256(b)
+    assert result["payload_status"] == "DIFF"
 
 
 def test_wrap_seeds_42_7_99_first_tick_kind_mismatch(tmp_path: Path) -> None:
@@ -119,7 +143,8 @@ def test_wrap_seeds_42_7_99_first_tick_kind_mismatch(tmp_path: Path) -> None:
             f"tick_b={result['first_event']['tick_b']}"
         )
         if result.get("payload_status") == "IDENTICAL":
-            print(
-                f"{left}vs{right}: label-stripped payload IDENTICAL; "
-                "do not claim seed-matrix diversity of the act stream"
+            pytest.fail(
+                f"{left}vs{right}: label-stripped payload IDENTICAL — "
+                "W3 requires DIFF; do not hide it"
             )
+        assert result["payload_status"] == "DIFF"

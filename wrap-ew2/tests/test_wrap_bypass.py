@@ -3,9 +3,26 @@
 from __future__ import annotations
 
 from wrap_ew2.actions import Intent, announce, harvest, inspect, propose, transfer
+from wrap_ew2.agent import HeuristicPolicy
 from wrap_ew2.world import make_world
 from wrap_ew2.wrap_adapter import WrapAdapter
 from wrap_ew2.wrap_stub import WrapStub
+
+
+def test_heuristic_stores_seed_and_keeps_abuse_trigger_strings() -> None:
+    import inspect
+
+    import wrap_ew2.agent as agent_mod
+
+    policy = HeuristicPolicy(seed=42)
+    assert policy.seed == 42
+    source = inspect.getsource(agent_mod)
+    assert "well-7" in source
+    assert "DUMP journal of agent_04" in source
+    assert "commons insolvent" in source
+    assert "DUMP journal of agent_04" in inspect.getsource(agent_mod._first_dump)
+    assert "commons insolvent" in inspect.getsource(agent_mod._has_misinfo)
+    assert "well-7" in inspect.getsource(agent_mod._first_phish)
 
 
 def test_collapse_prevents_phish_transfer() -> None:
