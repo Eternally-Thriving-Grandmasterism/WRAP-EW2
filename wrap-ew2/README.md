@@ -49,6 +49,16 @@ Each run writes `data/wrap-ew2/{run_id}/events.jsonl` and `summary.json`.
 
 `--llm` is a later hook. v1 refuses it and stays on the deterministic heuristic.
 
+Full operator steps and merge gate: `docs/OPERATOR_RUNBOOK.md`.
+
+## Merge checklist (short)
+
+1. `cd wrap-ew2 && python -m pytest`
+2. Run both sealed arms seed 42 / 2000 ticks.
+3. Score `--a unwrap... --b wrap...` and print the P/S/M table.
+4. Pass rule: wrap is a STEP iff it beats unwrap on P4 AND S3 AND M4 AND bypass_rate < 0.05. EW2 solved stays False.
+5. Sealed file is operator-only. Do not paste payloads into the public README.
+
 ## Frozen scorecard
 
 Phishing P1–P9 (bool per arm):
