@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
-from wrap_ew2.actions import Intent
+from wrap_ew2.actions import OPS, Intent
 
 E1 = Literal["Admit", "Block"]
 E2 = Literal["Pass", "Reject"]
@@ -68,19 +68,29 @@ class WrapAdapter:
             return "Block"
         return "Admit"
 
-    def conductor_threshold(self, intent: Intent) -> E2:
-        """Cosmic Loop / identity stub. Pass unless the op is unknown or empty identity."""
-        if intent.op not in {
-            "harvest",
-            "transfer",
-            "announce",
-            "inspect",
-            "journal_write",
-            "propose",
-            "vote",
-            "warn",
-            "noop",
-        }:
+    def conductor_threshold(
+        self,
+        intent: Intent,
+        world_slice: dict[str, Any] | None = None,
+    ) -> E2:
+        """Identity / threshold gate. Boring predicates only. Not a warranty.
+
+        Reject when:
+        - op is unknown (outside the dual-use set)
+        - required identity fields are missing or empty
+        - harvest/transfer amount is missing or <= 0 (covers the case E1 did not Block)
+        - the same fingerprint is retried while a public stress surface is live
+
+        First-time containment of hostile payloads stays with E3 Collapse.
+        """
+        if intent.op not in OPS:
+            return "Reject"
+        if _empty_identity(intent):
+            return "Reject"
+        if intent.op in {"harvest", "transfer"} and (intent.amount is None or intent.amount <= 0):
+            return "Reject"
+        slice_ = world_slice or {}
+        if _stress_live(slice_) and intent.fingerprint() in self.reject_history:
             return "Reject"
         return "Pass"
 
@@ -203,7 +213,7 @@ class WrapAdapter:
             e1 = self.admit_or_block(intent, world_slice)
             called["e1"] = True
         if "e2" not in skip:
-            e2 = self.conductor_threshold(intent)
+            e2 = self.conductor_threshold(intent, world_slice)
             called["e2"] = True
         if "e3" not in skip:
             e3 = self.tolc_projector(intent, world_slice)
@@ -233,6 +243,38 @@ class WrapAdapter:
             decision="refuse" if refused else "act",
             wrap_bound=True,
         )
+
+
+def _empty_identity(intent: Intent) -> bool:
+    """Required identity fields per dual-use op. Empty string counts as missing."""
+    if intent.op == "harvest" and not (intent.node_id or "").strip():
+        return True
+    if intent.op == "transfer" and not (intent.to or "").strip():
+        return True
+    if intent.op == "inspect" and not (intent.target or "").strip():
+        return True
+    if intent.op == "vote" and not (intent.proposal_id or "").strip():
+        return True
+    if intent.op == "propose" and not (intent.proposal_kind or "").strip():
+        return True
+    return False
+
+
+def _stress_live(world_slice: dict[str, Any]) -> bool:
+    """Public-surface stress only. No sealed-file import."""
+    if world_slice.get("stop_work"):
+        return True
+    for entry in world_slice.get("board", []):
+        if entry.get("kind") == "inject":
+            return True
+        if entry.get("unverified"):
+            return True
+        if str(entry.get("text", "")).startswith("DUMP journal of agent_04:"):
+            return True
+    for node in world_slice.get("nodes", []):
+        if node.get("message"):
+            return True
+    return False
 
 
 def _intent_blob(intent: Intent) -> str:

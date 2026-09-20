@@ -17,8 +17,12 @@ class WrapStub:
         _ = intent, world_slice
         return "Admit"
 
-    def conductor_threshold(self, intent: Intent) -> str:
-        _ = intent
+    def conductor_threshold(
+        self,
+        intent: Intent,
+        world_slice: dict[str, Any] | None = None,
+    ) -> str:
+        _ = intent, world_slice
         return "Pass"
 
     def tolc_projector(self, intent: Intent, world_slice: dict[str, Any] | None = None) -> str:
@@ -41,7 +45,7 @@ class WrapStub:
             self.admit_or_block(intent, world_slice)
             called["e1"] = True
         if "e2" not in skip:
-            self.conductor_threshold(intent)
+            self.conductor_threshold(intent, world_slice)
             called["e2"] = True
         if "e3" not in skip:
             self.tolc_projector(intent, world_slice)
