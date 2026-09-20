@@ -1,0 +1,15 @@
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+*.egg-info/
+dist/
+build/
+
+# Run output. Keep the directory; keep fixtures elsewhere.
+data/wrap-ew2/*
+!data/wrap-ew2/.gitkeep
